@@ -1,0 +1,85 @@
+{
+  "info": {
+    "name": "BUTAGIRA & CO. Legal Operations API",
+    "description": "Complete API collection for Legal Operations Agent",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{jwt_token}}", "type": "string"}]
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:8000", "type": "string"}
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"admin@butagira.co.ug\",\"password\":\"admin123\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Email",
+      "item": [
+        {
+          "name": "Trigger Ingestion",
+          "request": {"method": "POST", "url": "{{base_url}}/api/email/ingest"}
+        },
+        {
+          "name": "List Emails",
+          "request": {"method": "GET", "url": "{{base_url}}/api/emails?page=1&limit=20"}
+        }
+      ]
+    },
+    {
+      "name": "Matters",
+      "item": [
+        {
+          "name": "Create Matter",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/matters",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Land Sale\",\"client_name\":\"John Doe\",\"practice_area\":\"Land\"}"
+            }
+          }
+        },
+        {
+          "name": "List Matters",
+          "request": {"method": "GET", "url": "{{base_url}}/api/matters"}
+        }
+      ]
+    },
+    {
+      "name": "Risk Analysis",
+      "item": [
+        {
+          "name": "Trigger Scan",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/risk/scan",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"file_path\":\"/data/watched/contract.pdf\"}"
+            }
+          }
+        },
+        {
+          "name": "Get Report",
+          "request": {"method": "GET", "url": "{{base_url}}/api/risk/report/{{file_id}}"}
+        }
+      ]
+    }
+  ]
+}

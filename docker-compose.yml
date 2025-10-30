@@ -1,0 +1,133 @@
+services:
+  db:
+    image: ankane/pgvector:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: legal_ops
+      POSTGRES_USER: legal_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports: ["5432:5432"]
+    networks: [legal_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legal_admin -d legal_ops || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["6379:6379"]
+    volumes: ["redis_data:/data"]
+    networks: [legal_net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
+    ports: ["9000:9000","9001:9001"]
+    volumes: ["minio_data:/data"]
+    networks: [legal_net]
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://legal_admin:${DB_PASSWORD}@db:5432/legal_ops
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio:9000
+      JWT_SECRET: ${JWT_SECRET}
+      WATCHED_FOLDER: /data/watched
+    ports: ["8000:8000"]
+    volumes:
+      - type: bind
+        source: ${HOST_WATCHED}
+        target: /data/watched
+      - ./api:/app
+    depends_on: [db, redis, minio]
+    networks: [legal_net]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python - <<'PY'\nimport socket,sys\ns=socket.socket(); s.settimeout(3)\ns.connect(('localhost',8000)); s.close(); sys.exit(0)\nPY"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: ./worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://legal_admin:${DB_PASSWORD}@db:5432/legal_ops
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio:9000
+      WATCHED_FOLDER: /data/watched
+    volumes:
+      - type: bind
+        source: ${HOST_WATCHED}
+        target: /data/watched
+      - ./worker:/app
+    depends_on: [db, redis, minio]
+    networks: [legal_net]
+
+  filewatcher:
+    build: ./filewatcher
+    restart: unless-stopped
+    environment:
+      WATCHED_FOLDER: /data/watched
+      API_URL: http://api:8000
+    volumes:
+      - type: bind
+        source: ${HOST_WATCHED}
+        target: /data/watched
+        read_only: false
+    depends_on: [api]
+    networks: [legal_net]
+
+  frontend:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports: ["5173:80"]
+    depends_on: [api]
+    networks: [legal_net]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  proxy:
+    image: traefik:v2.10
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+    ports: ["80:80","8080:8080"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [legal_net]
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  legal_net:
+    driver: bridge

@@ -1,0 +1,1 @@
+This is a test file for the legal automation system. It contains some sample text to be scanned for risks.
